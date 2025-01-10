@@ -1,0 +1,41 @@
+providers:
+  docker:
+    exposedByDefault: false
+    network: traefik
+  file:
+    directory: "/etc/traefik/dynamic/"
+    watch: true
+
+entryPoints:
+  web:
+    address: ":80"
+
+    http:
+      redirections:
+        entryPoint:
+          to: tls
+          scheme: https
+  tls:
+    address: ":443"
+
+certificatesresolvers:
+  letsencrypt:
+    acme:
+      tlschallenge: true
+      email: update-me@example.com
+      storage: /etc/acme/acme-letsencrypt.json
+      preferredChain: "ISRG Root X1"
+
+  zerossl:
+    acme:
+      caServer: https://acme.zerossl.com/v2/DV90
+      email: update-me@example.com
+      storage: /etc/acme/acme-zerossl.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+#      eab:
+#        kid: abc123xyz
+#        hmacEncoded: abc123xzy

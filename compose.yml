@@ -1,0 +1,88 @@
+networks:
+  traefik:
+    external: true
+
+services:
+  traefik:
+    image: traefik:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - traefik
+    volumes:
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./data/dynamic/:/etc/traefik/dynamic:ro
+      - ./ssl/:/etc/acme
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: always
+    labels:
+      com.centurylinklabs.watchtower.enable: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+
+  static-pages:
+    image: nginx:latest
+    volumes:
+      - ./data/pages/:/usr/share/nginx/html
+      - ./nginx-static.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - traefik
+    restart: always
+    labels:
+      com.centurylinklabs.watchtower.enable: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "2"
+
+  canary-cd:
+    image: ghcr.io/rehborn/canary-cd:latest
+    volumes:
+      - ./data/:/data/
+      - /root/.docker/config.json:/config.json:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      SALT: ${CANARY_SALT}
+    networks:
+      - traefik
+    restart: always
+    labels:
+      traefik.enable: true
+      traefik.http.routers.canary-cd.rule: Host(`${CANARY_HOST}`)
+      traefik.http.routers.canary-cd.entrypoints: tls
+      traefik.http.routers.canary-cd.tls: true
+      traefik.http.routers.canary-cd.tls.certresolver: letsencrypt
+      com.centurylinklabs.watchtower.enable: true
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "5"
+        max-size: "10m"
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json:ro
+    command: --debug --http-api-update canary_canary-cd_1
+    networks:
+      traefik:
+    environment:
+      WATCHTOWER_HTTP_API_TOKEN: $WATCHTOWER_HTTP_API_TOKEN
+      WATCHTOWER_NOTIFICATIONS: "slack"
+      WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL: $WATCHTOWER_NOTIFICATION_SLACK_HOOK_URL
+
+    labels:
+      com.centurylinklabs.watchtower.enable: true
+      traefik.enable: true
+      traefik.http.routers.canary-cd-watchtower.rule: Host(`${CANARY_HOST}`) && PathPrefix(`/watchtower/`)
+      traefik.http.middlewares.canary-cd-watchtower.stripprefix.prefixes: /watchtower
+      traefik.http.routers.canary-cd-watchtower.middlewares: canary-cd-watchtower@docker
+      traefik.http.routers.canary-cd-watchtower.entrypoints: tls
+      traefik.http.routers.canary-cd-watchtower.tls: true
+      traefik.http.routers.canary-cd-watchtower.tls.certresolver: letsencrypt
