@@ -2,17 +2,22 @@
 
 clone repo
 ```shell
-git clone https://github.com/rehborn/canary-deploy -b dev
+git clone https://github.com/rehborn/canary-deploy && cd canary-deploy
 ```
 
 create config
 ```shell
-cd canary-deploy
-cp .env-example .env
-echo "CANARY_SALT=$(openssl rand -base64 32)" > .env
+echo "CANARY_HOST=canary.example.com" >> .env
+echo "CANARY_SALT=$(openssl rand -base64 32)" >> .env
 ```
 
-start
+**create `traefik` network**
+
 ```shell
-source .env ; docker compose up -d
+docker network create traefik
+```
+
+**start**
+```shell
+docker compose up -d
 ```
